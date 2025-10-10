@@ -1,4 +1,4 @@
-//app/addresses/page.jsx
+// app/addresses/page.jsx
 "use client";
 import Protected from "@/components/Protected";
 import { useEffect, useState } from "react";
@@ -10,44 +10,145 @@ export default function AddressesPage(){
   const { token } = useAuth();
   const [addresses, setAddresses] = useState([]);
   const [form, setForm] = useState({ line1:"", line2:"", city:"", state:"", zip:"", is_default:false });
+  const [loading, setLoading] = useState(false);
 
-  const load = async () => { const list = await api.get(endpoints.addresses(), token); setAddresses(list || []); };
-  useEffect(() => { if (token) load().catch(console.error); }, [token]);
+  const load = async () => { 
+    const list = await api.get(endpoints.addresses(), token); 
+    setAddresses(list || []); 
+  };
+  
+  useEffect(() => { 
+    if (token) load().catch(console.error); 
+  }, [token]);
 
-  const add = async (e) => { e.preventDefault(); await api.post(endpoints.addresses(), form, token); setForm({ line1:"", line2:"", city:"", state:"", zip:"", is_default:false }); load(); };
-  const del = async (id) => { await api.delete(`${endpoints.addresses()}/${id}`, token); load(); };
+  const add = async (e) => { 
+    e.preventDefault(); 
+    setLoading(true);
+    try {
+      await api.post(endpoints.addresses(), form, token); 
+      setForm({ line1:"", line2:"", city:"", state:"", zip:"", is_default:false });
+      await load();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <Protected>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="card">
-          <h2 className="font-semibold mb-3">Your Addresses</h2>
-          <div className="space-y-3">
-            {addresses.map(a => (
-              <div key={a.id} className="border border-zinc-800 rounded-lg p-3">
-                <div>{a.line1}{a.line2 ? `, ${a.line2}` : ""}</div>
-                <div>{a.city}, {a.state} {a.zip}</div>
-                {a.is_default && <span className="badge mt-1">Default</span>}
-                <div className="mt-2"><button className="btn-outline" onClick={()=>del(a.id)}>Delete</button></div>
-              </div>
-            ))}
-          </div>
+    <AdminGuard>
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Edit Dish</h1>
+          <p className="text-zinc-400">Update menu item details</p>
         </div>
+        
         <div className="card">
-          <h2 className="font-semibold mb-3">Add Address</h2>
-          <form onSubmit={add} className="space-y-3">
-            <input className="input" placeholder="Line 1" value={form.line1} onChange={e=>setForm({...form, line1:e.target.value})} required />
-            <input className="input" placeholder="Line 2" value={form.line2} onChange={e=>setForm({...form, line2:e.target.value})} />
-            <div className="grid grid-cols-2 gap-3">
-              <input className="input" placeholder="City" value={form.city} onChange={e=>setForm({...form, city:e.target.value})} required />
-              <input className="input" placeholder="State" value={form.state} onChange={e=>setForm({...form, state:e.target.value})} required />
+          <form onSubmit={submit} className="space-y-6">
+            {/* Image Upload */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Dish Image</label>
+              <div className="space-y-3">
+                {preview && (
+                  <div className="relative w-full h-48 rounded-xl overflow-hidden">
+                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer cursor-pointer"
+                />
+              </div>
             </div>
-            <input className="input" placeholder="ZIP" value={form.zip} onChange={e=>setForm({...form, zip:e.target.value})} required />
-            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.is_default} onChange={e=>setForm({...form, is_default:e.target.checked})} />Make default</label>
-            <button className="btn w-full" type="submit">Save Address</button>
+
+            {/* Basic Info */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Dish Name *</label>
+                <input 
+                  className="input" 
+                  placeholder="Name" 
+                  value={form.name || ""} 
+                  onChange={e=>setForm({...form, name:e.target.value})} 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Price *</label>
+                <input 
+                  className="input" 
+                  type="number" 
+                  step="0.01" 
+                  placeholder="Price" 
+                  value={form.price || 0} 
+                  onChange={e=>setForm({...form, price: parseFloat(e.target.value || "0")})} 
+                  required 
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Description</label>
+              <textarea 
+                className="input min-h-[100px] resize-none" 
+                placeholder="Description" 
+                value={form.description || ""} 
+                onChange={e=>setForm({...form, description:e.target.value})} 
+              />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Category</label>
+                <input 
+                  className="input" 
+                  placeholder="Category" 
+                  value={form.category || ""} 
+                  onChange={e=>setForm({...form, category:e.target.value})} 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Tags</label>
+                <input 
+                  className="input" 
+                  placeholder="Tags" 
+                  value={form.tags || ""} 
+                  onChange={e=>setForm({...form, tags:e.target.value})} 
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={!!form.is_available} 
+                onChange={e=>setForm({...form, is_available:e.target.checked})}
+                className="w-4 h-4 rounded border-zinc-700"
+              />
+              Available for order
+            </label>
+
+            <div className="flex gap-3 pt-4">
+              <button 
+                className="btn flex-1" 
+                type="submit" 
+                disabled={loading}
+              >
+                {loading ? "Saving..." : "Save Changes"}
+              </button>
+              <button 
+                type="button"
+                className="btn-outline" 
+                onClick={() => router.back()}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         </div>
       </div>
-    </Protected>
+    </AdminGuard>
   );
 }
