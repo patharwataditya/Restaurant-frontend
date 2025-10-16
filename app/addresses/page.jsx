@@ -6,149 +6,183 @@ import { api } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { useAuth } from "@/hooks/useAuth";
 
-export default function AddressesPage(){
+const blankForm = { line1: "", line2: "", city: "", state: "", zip: "", is_default: false };
+
+export default function AddressesPage() {
   const { token } = useAuth();
   const [addresses, setAddresses] = useState([]);
-  const [form, setForm] = useState({ line1:"", line2:"", city:"", state:"", zip:"", is_default:false });
+  const [form, setForm] = useState(blankForm);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const load = async () => { 
-    const list = await api.get(endpoints.addresses(), token); 
-    setAddresses(list || []); 
+  const loadAddresses = async () => {
+    if (!token) return;
+    try {
+      const list = await api.get(endpoints.addresses(), token);
+      setAddresses(list || []);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to load addresses");
+    }
   };
-  
-  useEffect(() => { 
-    if (token) load().catch(console.error); 
+
+  useEffect(() => {
+    loadAddresses().catch(console.error);
   }, [token]);
 
-  const add = async (e) => { 
-    e.preventDefault(); 
+  const addAddress = async (event) => {
+    event.preventDefault();
+    if (!token || loading) return;
     setLoading(true);
+    setError(null);
     try {
-      await api.post(endpoints.addresses(), form, token); 
-      setForm({ line1:"", line2:"", city:"", state:"", zip:"", is_default:false });
-      await load();
-    } catch (error) {
-      console.error(error);
+      await api.post(endpoints.addresses(), form, token);
+      setForm(blankForm);
+      await loadAddresses();
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to save address");
     } finally {
       setLoading(false);
     }
   };
 
+  const removeAddress = async (id) => {
+    if (!token) return;
+    const confirmed = typeof window === "undefined" ? true : window.confirm("Delete this address?");
+    if (!confirmed) return;
+    try {
+      await api.delete(`${endpoints.addresses()}/${id}`, token);
+      setAddresses((prev) => prev.filter((addr) => addr.id !== id));
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to delete address");
+    }
+  };
+
   return (
-    <AdminGuard>
-      <div className="max-w-2xl mx-auto space-y-6">
+    <Protected>
+      <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold mb-2">Edit Dish</h1>
-          <p className="text-zinc-400">Update menu item details</p>
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">Saved Addresses</h1>
+          <p className="text-zinc-400">Manage your delivery locations for faster checkout.</p>
         </div>
-        
-        <div className="card">
-          <form onSubmit={submit} className="space-y-6">
-            {/* Image Upload */}
-            <div>
-              <label className="block text-sm font-medium mb-2">Dish Image</label>
-              <div className="space-y-3">
-                {preview && (
-                  <div className="relative w-full h-48 rounded-xl overflow-hidden">
-                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        <div className="card space-y-4">
+          <h2 className="font-semibold text-lg">Your Addresses</h2>
+          {addresses.length === 0 ? (
+            <p className="text-sm text-zinc-400">You have not added any addresses yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {addresses.map((address) => (
+                <div
+                  key={address.id}
+                  className="p-4 border border-zinc-800 rounded-lg bg-zinc-900/40 flex flex-col gap-3"
+                >
+                  <div>
+                    <div className="font-medium">{address.line1}</div>
+                    {address.line2 && <div className="text-sm text-zinc-400">{address.line2}</div>}
+                    <div className="text-sm text-zinc-400">
+                      {address.city}, {address.state} {address.zip}
+                    </div>
                   </div>
-                )}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleFileChange}
-                  className="block w-full text-sm text-zinc-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500 file:text-white hover:file:bg-emerald-600 file:cursor-pointer cursor-pointer"
-                />
-              </div>
+                  <div className="flex items-center justify-between">
+                    {address.is_default ? (
+                      <span className="badge bg-emerald-500/20 text-emerald-400 border-emerald-500/40">
+                        Default
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-500 uppercase tracking-wide">Secondary</span>
+                    )}
+                    <button
+                      type="button"
+                      className="text-sm text-red-400 hover:text-red-300"
+                      onClick={() => removeAddress(address.id)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
 
-            {/* Basic Info */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Dish Name *</label>
-                <input 
-                  className="input" 
-                  placeholder="Name" 
-                  value={form.name || ""} 
-                  onChange={e=>setForm({...form, name:e.target.value})} 
-                  required 
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Price *</label>
-                <input 
-                  className="input" 
-                  type="number" 
-                  step="0.01" 
-                  placeholder="Price" 
-                  value={form.price || 0} 
-                  onChange={e=>setForm({...form, price: parseFloat(e.target.value || "0")})} 
-                  required 
-                />
-              </div>
-            </div>
-
+        <div className="card">
+          <h2 className="font-semibold text-lg mb-4">Add New Address</h2>
+          <form onSubmit={addAddress} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Description</label>
-              <textarea 
-                className="input min-h-[100px] resize-none" 
-                placeholder="Description" 
-                value={form.description || ""} 
-                onChange={e=>setForm({...form, description:e.target.value})} 
+              <label className="block text-sm font-medium mb-2">Address Line 1 *</label>
+              <input
+                className="input"
+                placeholder="Street address"
+                value={form.line1}
+                onChange={(e) => setForm({ ...form, line1: e.target.value })}
+                required
               />
             </div>
-
+            <div>
+              <label className="block text-sm font-medium mb-2">Address Line 2</label>
+              <input
+                className="input"
+                placeholder="Apartment, suite (optional)"
+                value={form.line2}
+                onChange={(e) => setForm({ ...form, line2: e.target.value })}
+              />
+            </div>
             <div className="grid md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Category</label>
-                <input 
-                  className="input" 
-                  placeholder="Category" 
-                  value={form.category || ""} 
-                  onChange={e=>setForm({...form, category:e.target.value})} 
+                <label className="block text-sm font-medium mb-2">City *</label>
+                <input
+                  className="input"
+                  placeholder="City"
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Tags</label>
-                <input 
-                  className="input" 
-                  placeholder="Tags" 
-                  value={form.tags || ""} 
-                  onChange={e=>setForm({...form, tags:e.target.value})} 
+                <label className="block text-sm font-medium mb-2">State *</label>
+                <input
+                  className="input"
+                  placeholder="State"
+                  value={form.state}
+                  onChange={(e) => setForm({ ...form, state: e.target.value })}
+                  required
                 />
               </div>
             </div>
-
+            <div>
+              <label className="block text-sm font-medium mb-2">ZIP Code *</label>
+              <input
+                className="input"
+                placeholder="ZIP"
+                value={form.zip}
+                onChange={(e) => setForm({ ...form, zip: e.target.value })}
+                required
+              />
+            </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={!!form.is_available} 
-                onChange={e=>setForm({...form, is_available:e.target.checked})}
+              <input
+                type="checkbox"
+                checked={form.is_default}
+                onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
                 className="w-4 h-4 rounded border-zinc-700"
               />
-              Available for order
+              Make this my default address
             </label>
-
-            <div className="flex gap-3 pt-4">
-              <button 
-                className="btn flex-1" 
-                type="submit" 
-                disabled={loading}
-              >
-                {loading ? "Saving..." : "Save Changes"}
-              </button>
-              <button 
-                type="button"
-                className="btn-outline" 
-                onClick={() => router.back()}
-              >
-                Cancel
-              </button>
-            </div>
+            <button className="btn w-full" type="submit" disabled={loading}>
+              {loading ? "Saving..." : "Save Address"}
+            </button>
           </form>
         </div>
       </div>
-    </AdminGuard>
+    </Protected>
   );
 }
